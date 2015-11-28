@@ -9,10 +9,10 @@ import (
 )
 
 var (
-	THINK_MAX_TIME int = 15
-	EAT_TIME time.Duration = 5 * time.Second
+	THINK_MAX_TIME int = 8
+	EAT_TIME time.Duration = 10 * time.Second
 	HUNGRY_MAX_TIME time.Duration = 3 * EAT_TIME
-	PHILOS = 40
+	PHILOS = 300
 	names = []string{}
 )
 
@@ -36,7 +36,7 @@ type philosopher struct {
 }
 
 func (p philosopher) timeTrack(from time.Time, method string) {
-	p.say(fmt.Sprintf("I've finished %s in %v. I'm now %s.", method, time.Since(from), *p.state))
+	p.say(fmt.Sprintf("I've finished %s in %vs. I'm now %s.", method, int64(time.Since(from)) / 1e9, *p.state))
 }
 
 func (p philosopher) say(message string) {
@@ -59,7 +59,7 @@ func (p philosopher) Live() {
 			defer p.timeTrack(from, *p.state)
 			switch *p.state {
 			case "think":
-				time.Sleep(time.Duration(rand.Intn(THINK_MAX_TIME)) * time.Second)
+				time.Sleep(time.Duration(rand.Intn(THINK_MAX_TIME) + 2) * time.Second)
 				*p.state = "hungry"
 			case "dead":
 				return
@@ -132,7 +132,7 @@ func main() {
 	for i := range phils {
 		go phils[i].Live()
 	}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < PHILOS; i++ {
 		_ = <-d
 	}
 	return
