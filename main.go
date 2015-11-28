@@ -5,13 +5,15 @@ import (
 	"log"
 	"math/rand"
 	"time"
+	"os/exec"
 )
 
 var (
-	THINK_MAX_TIME  int           = 15
-	EAT_TIME        time.Duration = 5 * time.Second
+	THINK_MAX_TIME int = 15
+	EAT_TIME time.Duration = 5 * time.Second
 	HUNGRY_MAX_TIME time.Duration = 3 * EAT_TIME
-	names                         = []string{"Bite", "Caca", "Aristote"}
+	PHILOS = 40
+	names = []string{}
 )
 
 type fourchette bool // Used/Free For future improvement
@@ -43,10 +45,13 @@ func (p philosopher) say(message string) {
 
 func (p philosopher) Live() {
 	p.state = new(string)
-	//var from time.Duration
+
+
 	defer p.timeTrack(time.Now(), "my life")
-	defer func() { *p.state = "dead"
-	p.dying <- 1}()
+	defer func() {
+		*p.state = "dead"
+		p.dying <- 1
+	}()
 	*p.state = "hungry"
 	for *p.state != "dead" {
 		from := time.Now()
@@ -98,6 +103,13 @@ func main() {
 	d := make(chan int)
 	phils := []philosopher{}
 	forks := []fourchette{}
+	for i := PHILOS; i >= 0; i-- {
+		out, err := exec.Command("uuidgen").Output()
+		if err != nil {
+			log.Fatal(err)
+		}
+		names = append(names, string(out[:len(out) - 1]))
+	}
 	log.Println(names)
 
 	watcher(a)
@@ -120,7 +132,7 @@ func main() {
 	for i := range phils {
 		go phils[i].Live()
 	}
-	for i := 0; i < 4; i++{
+	for i := 0; i < 4; i++ {
 		_ = <-d
 	}
 	return
