@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"time"
 	"os/exec"
+	"time"
 )
 
 var (
-	THINK_MAX_TIME int = 8
-	EAT_TIME time.Duration = 10 * time.Second
+	THINK_MAX_TIME  int           = 8
+	EAT_TIME        time.Duration = 10 * time.Second
 	HUNGRY_MAX_TIME time.Duration = 3 * EAT_TIME
-	PHILOS = 300
-	names = []string{}
+	PHILOS                        = 300
+	names                         = []string{}
 )
 
 type fourchette bool // Used/Free For future improvement
@@ -30,54 +30,52 @@ type philosopher struct {
 	name     string
 	left     *fourchette
 	right    *fourchette
-	state    *string
+	state    string
 	dying    chan int
 	announce chan announcement
 }
 
-func (p philosopher) timeTrack(from time.Time, method string) {
-	p.say(fmt.Sprintf("I've finished %s in %vs. I'm now %s.", method, int64(time.Since(from)) / 1e9, *p.state))
+func (p *philosopher) timeTrack(from time.Time, method string) {
+	p.say(fmt.Sprintf("I've finished %s in %vs. I'm now %s.", method, int64(time.Since(from))/1e9, p.state))
 }
 
-func (p philosopher) say(message string) {
+func (p *philosopher) say(message string) {
 	p.announce <- announcement{from: p.name, message: message}
 }
 
 func (p philosopher) Live() {
-	p.state = new(string)
-
 
 	defer p.timeTrack(time.Now(), "my life")
 	defer func() {
-		*p.state = "dead"
+		p.state = "dead"
 		p.dying <- 1
 	}()
-	*p.state = "hungry"
-	for *p.state != "dead" {
+	p.state = "hungry"
+	for p.state != "dead" {
 		from := time.Now()
 		func() {
-			defer p.timeTrack(from, *p.state)
-			switch *p.state {
+			defer p.timeTrack(from, p.state)
+			switch p.state {
 			case "think":
-				time.Sleep(time.Duration(rand.Intn(THINK_MAX_TIME) + 2) * time.Second)
-				*p.state = "hungry"
+				time.Sleep(time.Duration(rand.Intn(THINK_MAX_TIME)+2) * time.Second)
+				p.state = "hungry"
 			case "dead":
 				return
 			case "hungry":
 				for time.Since(from) < HUNGRY_MAX_TIME {
 					if *p.left && *p.right {
 						*p.left, *p.right = false, false
-						*p.state = "eat"
+						p.state = "eat"
 						return
 					}
 					time.Sleep(200 * time.Millisecond)
 				}
-				*p.state = "dead"
+				p.state = "dead"
 			case "eat":
 				time.Sleep(EAT_TIME)
 				*p.left = true
 				*p.right = true
-				*p.state = "think"
+				p.state = "think"
 			}
 		}()
 	}
@@ -108,7 +106,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		names = append(names, string(out[:len(out) - 1]))
+		names = append(names, string(out[:len(out)-1]))
 	}
 	log.Println(names)
 
