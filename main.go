@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os/exec"
 	"time"
+
+	"github.com/docker/docker/pkg/namesgenerator"
 )
 
 var (
@@ -16,20 +17,20 @@ var (
 	names                         = []string{}
 )
 
-type fourchette bool // Used/Free For future improvement
+type fork bool // Used/Free For future improvement
 
 type announcement struct {
 	from, message string
 }
 
 func (a announcement) String() string {
-	return fmt.Sprintf("%s: %s", a.from, a.message)
+	return fmt.Sprintf("%-25s: %s", a.from, a.message)
 }
 
 type philosopher struct {
 	name     string
-	left     *fourchette
-	right    *fourchette
+	left     *fork
+	right    *fork
 	state    string
 	dying    chan int
 	announce chan announcement
@@ -100,13 +101,9 @@ func main() {
 	defer timeTrack(time.Now(), "main", a)
 	d := make(chan int)
 	phils := []philosopher{}
-	forks := []fourchette{}
+	forks := []fork{}
 	for i := PHILOS; i >= 0; i-- {
-		out, err := exec.Command("uuidgen").Output()
-		if err != nil {
-			log.Fatal(err)
-		}
-		names = append(names, string(out[:len(out)-1]))
+		names = append(names, namesgenerator.GetRandomName(0))
 	}
 	log.Println(names)
 
@@ -115,7 +112,7 @@ func main() {
 	// Initialize
 	for _, name := range names {
 		phils = append(phils, philosopher{name: name, announce: a, dying: d})
-		forks = append(forks, fourchette(true))
+		forks = append(forks, fork(true))
 	}
 	for i := range phils {
 		dude := &phils[i]
@@ -131,7 +128,7 @@ func main() {
 		go phils[i].Live()
 	}
 	for i := 0; i < PHILOS; i++ {
-		_ = <-d
+		<-d
 	}
 	return
 }
