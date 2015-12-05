@@ -11,19 +11,30 @@ import (
 )
 
 var (
-	THINK_MAX_TIME  time.Duration
-	EAT_TIME        time.Duration
-	HUNGRY_MAX_TIME time.Duration
-	tempo           time.Duration
-	PHILOS          int
-	duration        time.Duration
-	names           = []string{}
+	THINK_MAX_TIME    time.Duration
+	EAT_TIME          time.Duration
+	HUNGRY_MAX_TIME   time.Duration
+	tempo             time.Duration
+	PHILOS            int
+	duration          time.Duration
+	names             = []string{}
+	verbose           bool
+	important_methods = []string{"my life"}
 )
 
-type fork bool // Used/Free For future improvement
+type fork bool //Free For future improvement
 
 type announcement struct {
 	from, message string
+}
+
+func is_important(method string) bool {
+	for _, x := range important_methods {
+		if x == method {
+			return true
+		}
+	}
+	return false
 }
 
 func (a announcement) String() string {
@@ -32,15 +43,19 @@ func (a announcement) String() string {
 
 type philosopher struct {
 	name     string
-	left     *fork
-	right    *fork
+	left     fork
+	leftC    chan fork
+	right    fork
+	rightC   chan fork
 	state    string
 	dying    chan int
 	announce chan announcement
 }
 
 func (p *philosopher) timeTrack(from time.Time, method string) {
-	p.say(fmt.Sprintf("I've finished %s in %vs. I'm now %s.", method, int64(time.Since(from))/1e9, p.state))
+	if verbose || is_important(method) {
+		p.say(fmt.Sprintf("I've finished %s in %vs. I'm now %s.", method, int64(time.Since(from))/1e9, p.state))
+	}
 }
 
 func (p *philosopher) say(message string) {
@@ -66,10 +81,21 @@ func (p philosopher) Live() {
 			case "dead":
 				return
 			case "hungry":
-				for time.Since(from) < HUNGRY_MAX_TIME {
-					if *p.left && *p.right {
-						*p.left, *p.right = false, false
-						p.state = "eat"
+				hunger := time.After(HUNGRY_MAX_TIME)
+				for {
+					select {
+					case p.left = <-p.leftC:
+						timeout := time.After(tempo * 2)
+						select {
+						case p.right = <-p.rightC:
+							p.state = "eat"
+							return
+						case _ = <-timeout:
+							p.leftC <- p.left
+						}
+
+					case _ = <-hunger:
+						p.state = "dead"
 						return
 					}
 					time.Sleep(tempo)
@@ -77,8 +103,8 @@ func (p philosopher) Live() {
 				p.state = "dead"
 			case "eat":
 				time.Sleep(EAT_TIME)
-				*p.left = true
-				*p.right = true
+				p.leftC <- p.left
+				p.rightC <- p.right
 				p.state = "think"
 			}
 		}()
@@ -110,8 +136,8 @@ func Run(c *cli.Context) {
 	defer timeTrack(time.Now(), "main", a)
 	d := make(chan int)
 	phils := []philosopher{}
-	forks := []fork{}
-	for i := PHILOS; i >= 0; i-- {
+	forks := []chan fork{}
+	for i := PHILOS; i > 0; i-- {
 		names = append(names, namesgenerator.GetRandomName(0))
 	}
 	log.Println(names)
@@ -121,21 +147,29 @@ func Run(c *cli.Context) {
 	// Initialize
 	for _, name := range names {
 		phils = append(phils, philosopher{name: name, announce: a, dying: d})
-		forks = append(forks, fork(true))
+		forks = append(forks, make(chan fork, 2))
 	}
+
 	for i := range phils {
 		dude := &phils[i]
-		dude.left = &(forks[i])
+		dude.leftC = forks[i]
 		if i == 0 {
-			dude.right = &(forks[len(forks)-1])
+			dude.rightC = forks[len(forks)-1]
 		} else {
-			dude.right = &(forks[i-1])
+			dude.rightC = forks[i-1]
 		}
 	}
 
-	// Launch the simulation
+	// Launch the dudes
 	for i := range phils {
 		go phils[i].Live()
+	}
+	//Put forks on the table
+	for _, c := range forks {
+		func() {
+			c <- true
+		}()
+
 	}
 
 W:
@@ -193,6 +227,11 @@ func main() {
 			Usage:       "The waiting time between two attempts to get a fork.",
 			Destination: &tempo,
 			Value:       200 * time.Millisecond,
+		},
+		cli.BoolFlag{
+			Name:        "verbose",
+			Usage:       "More output",
+			Destination: &verbose,
 		},
 	}
 
