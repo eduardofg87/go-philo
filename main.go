@@ -14,6 +14,7 @@ var (
 	THINK_MAX_TIME  time.Duration
 	EAT_TIME        time.Duration
 	HUNGRY_MAX_TIME time.Duration
+	tempo           time.Duration
 	PHILOS          int
 	duration        time.Duration
 	names           = []string{}
@@ -71,7 +72,7 @@ func (p philosopher) Live() {
 						p.state = "eat"
 						return
 					}
-					time.Sleep(200 * time.Millisecond)
+					time.Sleep(tempo)
 				}
 				p.state = "dead"
 			case "eat":
@@ -98,7 +99,13 @@ func watcher(c chan announcement) {
 	}()
 }
 
+func summarize() {
+	fmt.Println("Summarize: Not implemented yet !")
+	//TODO: Make a summarize function
+}
+
 func Run(c *cli.Context) {
+	timeout := time.After(duration)
 	a := make(chan announcement)
 	defer timeTrack(time.Now(), "main", a)
 	d := make(chan int)
@@ -126,12 +133,21 @@ func Run(c *cli.Context) {
 		}
 	}
 
+	// Launch the simulation
 	for i := range phils {
 		go phils[i].Live()
 	}
-	for i := 0; i < PHILOS; i++ {
-		<-d
+
+W:
+	for i := 0; i < PHILOS; {
+		select {
+		case _ = <-d:
+			i++
+		case _ = <-timeout:
+			break W
+		}
 	}
+	summarize()
 	return
 }
 
@@ -171,6 +187,12 @@ func main() {
 			Usage:       "The time it takes to eat",
 			Destination: &EAT_TIME,
 			Value:       10 * time.Second,
+		},
+		cli.DurationFlag{
+			Name:        "tempo",
+			Usage:       "The waiting time between two attempts to get a fork.",
+			Destination: &tempo,
+			Value:       200 * time.Millisecond,
 		},
 	}
 
