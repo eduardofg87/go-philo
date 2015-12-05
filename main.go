@@ -2,19 +2,21 @@ package main
 
 import (
 	"fmt"
+	"github.com/codegangsta/cli"
+	"github.com/docker/docker/pkg/namesgenerator"
 	"log"
 	"math/rand"
+	"os"
 	"time"
-
-	"github.com/docker/docker/pkg/namesgenerator"
 )
 
 var (
-	THINK_MAX_TIME  int           = 8
-	EAT_TIME        time.Duration = 10 * time.Second
-	HUNGRY_MAX_TIME time.Duration = 3 * EAT_TIME
-	PHILOS                        = 300
-	names                         = []string{}
+	THINK_MAX_TIME  time.Duration
+	EAT_TIME        time.Duration
+	HUNGRY_MAX_TIME time.Duration
+	PHILOS          int
+	duration        time.Duration
+	names           = []string{}
 )
 
 type fork bool // Used/Free For future improvement
@@ -58,7 +60,7 @@ func (p philosopher) Live() {
 			defer p.timeTrack(from, p.state)
 			switch p.state {
 			case "think":
-				time.Sleep(time.Duration(rand.Intn(THINK_MAX_TIME)+2) * time.Second)
+				time.Sleep(time.Duration(rand.Intn(int(THINK_MAX_TIME)) + 2))
 				p.state = "hungry"
 			case "dead":
 				return
@@ -96,7 +98,7 @@ func watcher(c chan announcement) {
 	}()
 }
 
-func main() {
+func Run(c *cli.Context) {
 	a := make(chan announcement)
 	defer timeTrack(time.Now(), "main", a)
 	d := make(chan int)
@@ -131,4 +133,47 @@ func main() {
 		<-d
 	}
 	return
+}
+
+func main() {
+	app := cli.NewApp()
+	app.Name = "Philosophers Dinner experimentation"
+	app.Usage = "Use cli flags to control testing environnement"
+	app.Version = "1.0.2"
+
+	app.Flags = []cli.Flag{
+		cli.DurationFlag{
+			Name:        "time, t",
+			Usage:       "Time to run the experiment.",
+			Destination: &duration,
+			Value:       2 * time.Minute,
+		},
+		cli.IntFlag{
+			Name:        "philo_number, n",
+			Usage:       "How much dudes to simulate",
+			Destination: &PHILOS,
+			Value:       20,
+		},
+		cli.DurationFlag{
+			Name:        "max-think-time, s",
+			Usage:       "Maximum possible value for the *think* state.",
+			Destination: &THINK_MAX_TIME,
+			Value:       30 * time.Second,
+		},
+		cli.DurationFlag{
+			Name:        "max-hungry-time, d",
+			Usage:       "The limit of time a dude can be in *hungry* state before dying.",
+			Destination: &HUNGRY_MAX_TIME,
+			Value:       30 * time.Second,
+		},
+		cli.DurationFlag{
+			Name:        "eat-time, e",
+			Usage:       "The time it takes to eat",
+			Destination: &EAT_TIME,
+			Value:       10 * time.Second,
+		},
+	}
+
+	app.Action = Run
+	app.Run(os.Args)
 }
