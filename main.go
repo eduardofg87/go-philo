@@ -93,7 +93,6 @@ func (p philosopher) Live() {
 						case _ = <-timeout:
 							p.leftC <- p.left
 						}
-
 					case _ = <-hunger:
 						p.state = "dead"
 						return
@@ -214,7 +213,7 @@ func main() {
 			Name:        "max-hungry-time, d",
 			Usage:       "The limit of time a dude can be in *hungry* state before dying.",
 			Destination: &HUNGRY_MAX_TIME,
-			Value:       30 * time.Second,
+			Value:       40 * time.Second,
 		},
 		cli.DurationFlag{
 			Name:        "eat-time, e",
