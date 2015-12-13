@@ -22,7 +22,10 @@ var (
 	important_methods = []string{"my life"}
 )
 
-type fork bool //Free For future improvement
+type fork struct {
+	toRight chan int
+	toLeft  chan int
+} //Free For future improvement
 
 type announcement struct {
 	from, message string
@@ -38,15 +41,16 @@ func is_important(method string) bool {
 }
 
 func (a announcement) String() string {
-	return fmt.Sprintf("%-25s: %s", a.from, a.message)
+	//backstabbing_chandrasekhar
+	return fmt.Sprintf("%-26s: %s", a.from, a.message)
 }
 
 type philosopher struct {
 	name     string
-	left     fork
-	leftC    chan fork
-	right    fork
-	rightC   chan fork
+	leftIn   <-chan int
+	leftOut  chan<- int
+	rightIn  <-chan int
+	rightOut chan<- int
 	state    string
 	dying    chan int
 	announce chan announcement
@@ -76,7 +80,7 @@ func (p philosopher) Live() {
 			defer p.timeTrack(from, p.state)
 			switch p.state {
 			case "think":
-				time.Sleep(time.Duration(rand.Intn(int(THINK_MAX_TIME)) + 2))
+				time.Sleep(time.Duration(rand.Intn(int(THINK_MAX_TIME))))
 				p.state = "hungry"
 			case "dead":
 				return
@@ -84,14 +88,15 @@ func (p philosopher) Live() {
 				hunger := time.After(HUNGRY_MAX_TIME)
 				for {
 					select {
-					case p.left = <-p.leftC:
-						timeout := time.After(tempo * 2)
+					case _ = <-p.leftIn:
 						select {
-						case p.right = <-p.rightC:
+						case _ = <-p.rightIn:
 							p.state = "eat"
 							return
-						case _ = <-timeout:
-							p.leftC <- p.left
+						case _ = <-hunger:
+							p.state = "dead"
+							return
+
 						}
 					case _ = <-hunger:
 						p.state = "dead"
@@ -102,8 +107,8 @@ func (p philosopher) Live() {
 				p.state = "dead"
 			case "eat":
 				time.Sleep(EAT_TIME)
-				p.leftC <- p.left
-				p.rightC <- p.right
+				p.leftOut <- 1
+				p.rightOut <- 1
 				p.state = "think"
 			}
 		}()
@@ -135,7 +140,7 @@ func Run(c *cli.Context) {
 	defer timeTrack(time.Now(), "main", a)
 	d := make(chan int)
 	phils := []philosopher{}
-	forks := []chan fork{}
+	forks := []fork{}
 	for i := PHILOS; i > 0; i-- {
 		names = append(names, namesgenerator.GetRandomName(0))
 	}
@@ -146,16 +151,16 @@ func Run(c *cli.Context) {
 	// Initialize
 	for _, name := range names {
 		phils = append(phils, philosopher{name: name, announce: a, dying: d})
-		forks = append(forks, make(chan fork, 2))
+		forks = append(forks, fork{toRight: make(chan int, 2), toLeft: make(chan int, 2)})
 	}
 
 	for i := range phils {
 		dude := &phils[i]
-		dude.leftC = forks[i]
+		dude.leftIn, dude.leftOut = forks[i].toLeft, forks[i].toRight
 		if i == 0 {
-			dude.rightC = forks[len(forks)-1]
+			dude.rightIn, dude.rightOut = forks[len(forks)-1].toRight, forks[len(forks)-1].toLeft
 		} else {
-			dude.rightC = forks[i-1]
+			dude.rightIn, dude.rightOut = forks[i-1].toRight, forks[i-1].toLeft
 		}
 	}
 
@@ -164,20 +169,24 @@ func Run(c *cli.Context) {
 		go phils[i].Live()
 	}
 	//Put forks on the table
-	for _, c := range forks {
-		func() {
-			c <- true
-		}()
+	for i, f := range forks {
+		go func(i int, f fork) {
+			if i%2 == 0 {
+				f.toLeft <- 1
+			} else {
+				f.toRight <- 1
+			}
+		}(i, f)
 
 	}
-
-W:
+Wait:
 	for i := 0; i < PHILOS; {
 		select {
 		case _ = <-d:
 			i++
 		case _ = <-timeout:
-			break W
+			a <- announcement{from: "Main", message: fmt.Sprintf("%v dudes died during the simulation, over the total of %v.", i, PHILOS)}
+			break Wait
 		}
 	}
 	summarize()
@@ -185,10 +194,11 @@ W:
 }
 
 func main() {
+	rand.Seed(time.Now().Unix())
 	app := cli.NewApp()
 	app.Name = "Philosophers Dinner experimentation"
 	app.Usage = "Use cli flags to control testing environnement"
-	app.Version = "1.0.2"
+	app.Version = "1.1.0"
 
 	app.Flags = []cli.Flag{
 		cli.DurationFlag{
@@ -220,12 +230,6 @@ func main() {
 			Usage:       "The time it takes to eat",
 			Destination: &EAT_TIME,
 			Value:       10 * time.Second,
-		},
-		cli.DurationFlag{
-			Name:        "tempo",
-			Usage:       "The waiting time between two attempts to get a fork.",
-			Destination: &tempo,
-			Value:       200 * time.Millisecond,
 		},
 		cli.BoolFlag{
 			Name:        "verbose",
